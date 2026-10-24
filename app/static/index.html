@@ -29,7 +29,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="/static/style.css?v=4">
+  <link rel="stylesheet" href="/static/style.css?v=0.1.2">
 </head>
 <body class="bg-navy-950 text-slate-100 min-h-screen selection:bg-navy-600 selection:text-white">
 
@@ -375,9 +375,9 @@
         <div class="p-3 bg-navy-950 border border-navy-800 rounded-lg space-y-1">
           <div class="flex items-center justify-between text-body-text">
             <span class="text-slate-400">目前下載儲存位置：</span>
-            <button id="openCurrentFolderBtn" class="text-slate-300 hover:text-white flex items-center space-x-1 underline text-body-text">
+            <button id="openCurrentFolderBtn" class="hidden text-slate-300 hover:text-white flex items-center space-x-1 underline text-body-text">
               <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-              <span>在 Finder 開啟</span>
+              <span id="openCurrentFolderText">在系統中開啟</span>
             </button>
           </div>
           <div id="currentActiveDirDisplay" class="text-body-text text-slate-100 font-mono break-all font-semibold">
@@ -385,15 +385,67 @@
           </div>
         </div>
 
-        <!-- 系統原生視窗瀏覽按鈕 (主要行動) -->
-        <div>
+        <!-- 本機電腦 / 儲存環境切換選擇器 (Mac / Windows / NAS) -->
+        <div class="space-y-1.5">
+          <label class="text-body-text text-slate-300 block text-xs font-semibold">目標儲存環境 / 我的本機電腦：</label>
+          <div class="grid grid-cols-3 gap-1.5 p-1 bg-navy-950 rounded-lg border border-navy-800 text-xs">
+            <button 
+              type="button" 
+              id="tabPlatformMac" 
+              class="py-2 px-2 rounded-md font-medium flex items-center justify-center space-x-1 transition text-slate-400 hover:text-white"
+            >
+              <span>🍎 Mac 本機</span>
+            </button>
+            <button 
+              type="button" 
+              id="tabPlatformWin" 
+              class="py-2 px-2 rounded-md font-medium flex items-center justify-center space-x-1 transition text-slate-400 hover:text-white"
+            >
+              <span>🪟 Windows 本機</span>
+            </button>
+            <button 
+              type="button" 
+              id="tabPlatformNas" 
+              class="py-2 px-2 rounded-md font-medium flex items-center justify-center space-x-1 transition text-slate-400 hover:text-white"
+            >
+              <span>📦 NAS 伺服器</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 本機電腦自動存檔切換 (下載完成自動透過瀏覽器存入 Mac / Windows) -->
+        <div id="clientAutoDownloadRow" class="p-3 bg-navy-950 border border-navy-800 rounded-lg flex items-center justify-between">
+          <div class="space-y-0.5 pr-2">
+            <div class="text-xs font-semibold text-slate-200 flex items-center space-x-1.5">
+              <i data-lucide="download-cloud" class="w-3.5 h-3.5 text-blue-400"></i>
+              <span id="autoDownloadLabel">下載完成自動另存至本機電腦</span>
+            </div>
+            <p id="autoDownloadHint" class="text-xs text-slate-400">完成後自動存入此電腦下載資料夾（可於瀏覽器設定「每次詢問儲存位置」指定磁碟）</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+            <input type="checkbox" id="autoDownloadCheckbox" class="sr-only peer" checked>
+            <div class="w-9 h-5 bg-navy-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
+        </div>
+
+        <!-- 運行環境辨識橫幅 (自動感應 NAS / Mac / Windows) -->
+        <div id="envModeBanner" class="p-3 bg-navy-950/80 border border-navy-800 rounded-lg space-y-1">
+          <div class="flex items-center space-x-2 text-xs font-semibold text-blue-400">
+            <i data-lucide="server" class="w-3.5 h-3.5"></i>
+            <span id="envModeTitle">儲存環境配置</span>
+          </div>
+          <p id="envModeDesc" class="text-xs text-slate-400 leading-relaxed"></p>
+        </div>
+
+        <!-- 系統原生視窗瀏覽按鈕 (只在 Mac / Windows 支援原生選取時顯示，預設隱藏) -->
+        <div id="nativePickerWrapper" class="hidden">
           <button 
             id="chooseFolderBtn" 
             type="button" 
             class="w-full py-3 px-4 bg-navy-600 hover:bg-navy-500 active:scale-[0.99] text-white font-medium rounded-lg flex items-center justify-center space-x-2 border border-blue-500 shadow-md transition"
           >
             <i data-lucide="folder-search" class="w-5 h-5"></i>
-            <span>開啟系統 Finder 視窗瀏覽選取（本機電腦）</span>
+            <span id="chooseFolderBtnText">開啟系統視窗選取（本機電腦）</span>
           </button>
         </div>
 
@@ -402,12 +454,12 @@
 
         <!-- 手動輸入或貼上本機資料夾路徑 -->
         <div class="space-y-1.5 pt-1 border-t border-navy-800">
-          <span class="text-body-text text-slate-400 block text-xs">手動指定路徑（可直接貼上本機電腦任何資料夾）：</span>
+          <span id="manualPathLabel" class="text-body-text text-slate-400 block text-xs">手動指定路徑（可直接貼上任何資料夾路徑）：</span>
           <div class="flex items-center space-x-2">
             <input 
               type="text" 
               id="manualPathInput" 
-              placeholder="例如：/Users/您的名稱/Downloads 或 /Volumes/資料碟" 
+              placeholder="例如：/downloads 或自訂路徑" 
               class="text-body-text flex-1 px-3 py-2 bg-navy-950 border border-navy-800 rounded-lg text-slate-100 placeholder-slate-500 font-mono text-xs focus:outline-none focus:border-navy-500 transition"
             >
             <button 
@@ -422,7 +474,7 @@
 
         <!-- 快速常用位置捷徑 -->
         <div class="space-y-2 pt-1 border-t border-navy-800">
-          <span class="text-body-text text-slate-400 block">本機電腦常用位置捷徑：</span>
+          <span id="shortcutsLabel" class="text-body-text text-slate-400 block">常用位置捷徑：</span>
           <div id="shortcutButtonsList" class="flex flex-wrap gap-2 text-body-text">
             <!-- 動態注入捷徑按鈕 -->
           </div>
@@ -470,12 +522,12 @@
         <p>僅供個人學習與備份使用，請尊重版權內容。</p>
       </div>
       <div class="text-right">
-        <span class="font-mono text-slate-400 text-sm">v0.1</span>
+        <span class="font-mono text-slate-400 text-sm">v0.1.2</span>
       </div>
     </div>
   </footer>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=0.1.2"></script>
   <script>
     lucide.createIcons();
   </script>

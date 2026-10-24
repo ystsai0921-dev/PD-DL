@@ -24,7 +24,7 @@ from app.downloader import (
     format_bytes
 )
 
-app = FastAPI(title="PD Downloader", version="0.1.0")
+app = FastAPI(title="PD Downloader", version="0.1.2")
 
 # 允許跨域
 app.add_middleware(
@@ -152,7 +152,7 @@ async def api_save_settings(req: SettingsRequest):
         saved_path = set_download_dir(req.download_dir.strip())
         return {"status": "success", "download_dir": saved_path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"無法設定該路徑: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/settings/choose-folder")
@@ -200,58 +200,155 @@ async def api_choose_folder():
         return {"status": "error", "message": str(e), "download_dir": get_download_dir()}
 
 
-@app.get("/api/fs/browse")
-async def api_fs_browse(path: str = None):
-    """取得資料夾清單供網頁內直接滑鼠點選瀏覽 (全面支援本機電腦與所有磁碟)"""
+def get_runtime_info():
+    """動態分析伺服器運行環境，自適應提供正確的目錄捷徑與作業系統說明，並預先準備 Mac / Windows / NAS 預設設定供自由切換"""
+    is_docker = os.path.exists('/.dockerenv') or os.environ.get('DOWNLOAD_DIR') == '/downloads'
     home = os.path.expanduser("~")
-    
-    # 常用快速捷徑 (本機電腦硬碟 + 家目錄 + 常用資料夾 + 外接磁碟)
-    quick_shortcuts = [
+
+    server_mode = "nas" if is_docker else ("macos" if sys.platform == "darwin" else ("windows" if sys.platform == "win32" else "linux"))
+
+    # Mac 預設捷徑
+    mac_shortcuts = [
         {"name": "💻 本機硬碟 (Macintosh HD)", "path": "/"},
-        {"name": "🏠 家目錄 (~)", "path": home},
-        {"name": "📥 下載 (Downloads)", "path": os.path.join(home, "Downloads")},
-        {"name": "🖥️ 桌面 (Desktop)", "path": os.path.join(home, "Desktop")},
-        {"name": "🎬 影片 (Movies)", "path": os.path.join(home, "Movies")},
-        {"name": "🎵 音樂 (Music)", "path": os.path.join(home, "Music")},
-        {"name": "📄 文件 (Documents)", "path": os.path.join(home, "Documents")},
+        {"name": "🏠 家目錄 (~)", "path": home if sys.platform == "darwin" else "/Users/User"},
+        {"name": "📥 下載 (Downloads)", "path": os.path.join(home, "Downloads") if sys.platform == "darwin" else "/Users/User/Downloads"},
+        {"name": "🖥️ 桌面 (Desktop)", "path": os.path.join(home, "Desktop") if sys.platform == "darwin" else "/Users/User/Desktop"},
+        {"name": "🎬 影片 (Movies)", "path": os.path.join(home, "Movies") if sys.platform == "darwin" else "/Users/User/Movies"},
+        {"name": "🎵 音樂 (Music)", "path": os.path.join(home, "Music") if sys.platform == "darwin" else "/Users/User/Music"},
+        {"name": "📄 文件 (Documents)", "path": os.path.join(home, "Documents") if sys.platform == "darwin" else "/Users/User/Documents"},
     ]
-    # 外接磁碟 (如 資料碟、隨身碟、外接SSD)
-    if os.path.exists("/Volumes"):
+    if sys.platform == "darwin" and os.path.exists("/Volumes"):
         try:
             for v in sorted(os.listdir("/Volumes")):
                 vpath = os.path.join("/Volumes", v)
                 if os.path.isdir(vpath) and not v.startswith("."):
-                    quick_shortcuts.append({"name": f"💾 {v}", "path": vpath})
+                    mac_shortcuts.append({"name": f"💾 {v}", "path": vpath})
         except Exception:
             pass
 
-    current = os.path.abspath(path.strip()) if path and path.strip() else get_download_dir()
-    if not os.path.isdir(current):
-        current = home
+    # Windows 預設捷徑
+    win_shortcuts = [
+        {"name": "💻 系統磁碟 (C:)", "path": "C:\\"},
+        {"name": "💾 資料磁碟 (D:)", "path": "D:\\"},
+        {"name": "💾 備用磁碟 (E:)", "path": "E:\\"},
+        {"name": "📥 下載 (Downloads)", "path": os.path.join(home, "Downloads") if sys.platform == "win32" else "C:\\Users\\User\\Downloads"},
+        {"name": "🖥️ 桌面 (Desktop)", "path": os.path.join(home, "Desktop") if sys.platform == "win32" else "C:\\Users\\User\\Desktop"},
+        {"name": "🎬 影片 (Videos)", "path": os.path.join(home, "Videos") if sys.platform == "win32" else "C:\\Users\\User\\Videos"},
+        {"name": "🎵 音樂 (Music)", "path": os.path.join(home, "Music") if sys.platform == "win32" else "C:\\Users\\User\\Music"},
+        {"name": "📄 文件 (Documents)", "path": os.path.join(home, "Documents") if sys.platform == "win32" else "C:\\Users\\User\\Documents"},
+    ]
+    if sys.platform == "win32":
+        import string
+        for letter in string.ascii_uppercase:
+            drive = f"{letter}:\\"
+            if os.path.exists(drive) and drive not in ["C:\\", "D:\\", "E:\\"]:
+                win_shortcuts.append({"name": f"💾 磁碟 ({letter}:)", "path": drive})
+
+    # NAS 預設捷徑
+    nas_shortcuts = [
+        {"name": "📦 NAS 下載資料夾 (/downloads)", "path": "/downloads"},
+    ]
+    for cand in ["/volume1", "/storage", "/media", "/mnt"]:
+        if os.path.exists(cand) and os.path.isdir(cand) and cand != "/downloads":
+            nas_shortcuts.append({"name": f"💾 NAS 儲存區 ({cand})", "path": cand})
+
+    return {
+        "server_mode": server_mode,
+        "is_docker": is_docker,
+        "is_darwin": sys.platform == "darwin",
+        "is_win32": sys.platform == "win32",
+        "presets": {
+            "mac": {
+                "name": "Mac 本機電腦",
+                "mode_title": "🍎 Mac 本機電腦模式",
+                "mode_desc": "本機直接運行於 Mac，支援系統 Finder 視窗選取與所有外接磁碟。" if sys.platform == "darwin" else "您正在使用 Mac 電腦存取。下載完成後檔案將自動另存至您的 Mac 下載資料夾（或詢問儲存位置）。",
+                "can_native_pick": sys.platform == "darwin",
+                "native_pick_label": "開啟系統 Finder 視窗選取（Mac 本機資料夾）",
+                "placeholder": "例如：/Users/您的名稱/Downloads 或 /Volumes/資料碟",
+                "shortcuts": mac_shortcuts,
+            },
+            "windows": {
+                "name": "Windows 本機電腦",
+                "mode_title": "🪟 Windows 本機電腦模式",
+                "mode_desc": "本機直接運行於 Windows，支援檔案總管選取與全磁碟支援。" if sys.platform == "win32" else "您正在使用 Windows 電腦存取。下載完成後檔案將自動另存至您的 Windows 下載資料夾（或 C:\\ / D:\\ 磁碟）。",
+                "can_native_pick": sys.platform == "win32",
+                "native_pick_label": "開啟檔案總管視窗選取（Windows 資料夾）",
+                "placeholder": "例如：C:\\Users\\您的名稱\\Downloads 或 D:\\Video",
+                "shortcuts": win_shortcuts,
+            },
+            "nas": {
+                "name": "NAS 伺服器",
+                "mode_title": "📦 NAS 伺服器運作模式",
+                "mode_desc": "檔案直接儲存於 NAS 實體硬碟的 /downloads 目錄中，不佔用本機電腦空間。",
+                "can_native_pick": False,
+                "native_pick_label": "",
+                "placeholder": "例如：/downloads 或 /volume1/video",
+                "shortcuts": nas_shortcuts,
+            }
+        }
+    }
+
+
+@app.get("/api/fs/browse")
+async def api_fs_browse(path: str = None, platform: str = None):
+    """取得資料夾清單供網頁內直接滑鼠點選瀏覽 (全面支援本機電腦與所有磁碟，支援手動切換 Mac / Windows / NAS)"""
+    info = get_runtime_info()
+    home = os.path.expanduser("~")
+
+    # 如果客戶端指定了平台模式 (mac, windows, nas)，優先以該平台顯示
+    selected_platform = platform if platform in info["presets"] else info["server_mode"]
+    selected_preset = info["presets"][selected_platform]
+
+    if selected_platform == "nas" or (info["server_mode"] == "nas" and selected_platform == "nas"):
+        current = os.path.abspath(path.strip()) if path and path.strip() else get_download_dir()
+        valid_roots = [s["path"] for s in info["presets"]["nas"]["shortcuts"]]
+        if not any(current.startswith(vr) for vr in valid_roots):
+            current = "/downloads"
+        
+        if current in valid_roots or current == "/downloads":
+            parent = None
+        else:
+            parent = os.path.dirname(current)
+    else:
+        current = os.path.abspath(path.strip()) if path and path.strip() else get_download_dir()
+        if not os.path.isdir(current):
+            current = home if os.path.isdir(home) else "/"
+        parent = os.path.dirname(current) if current != "/" else None
 
     folders = []
-    parent = os.path.dirname(current) if current != "/" else None
-
-    try:
-        for item in sorted(os.listdir(current)):
-            if item.startswith("."):
-                continue
-            item_path = os.path.join(current, item)
-            try:
-                if os.path.isdir(item_path):
-                    folders.append({"name": item, "path": item_path})
-            except Exception:
-                pass
-    except Exception:
-        pass
+    if os.path.isdir(current):
+        try:
+            for item in sorted(os.listdir(current)):
+                if item.startswith("."):
+                    continue
+                item_path = os.path.join(current, item)
+                try:
+                    if os.path.isdir(item_path):
+                        folders.append({"name": item, "path": item_path})
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     return {
         "current_path": current,
         "parent_path": parent,
         "folders": folders,
-        "shortcuts": [s for s in quick_shortcuts if os.path.exists(s["path"])],
+        "shortcuts": selected_preset["shortcuts"],
         "active_download_dir": get_download_dir(),
-        "is_darwin": sys.platform == "darwin",
+        "runtime_info": {
+            "mode": selected_platform,
+            "mode_title": selected_preset["mode_title"],
+            "mode_desc": selected_preset["mode_desc"],
+            "can_native_pick": selected_preset["can_native_pick"],
+            "native_pick_label": selected_preset["native_pick_label"],
+            "placeholder": selected_preset["placeholder"],
+            "shortcuts": selected_preset["shortcuts"],
+            "server_mode": info["server_mode"],
+            "is_darwin": info["is_darwin"],
+            "presets": info["presets"],
+        },
+        "is_darwin": info["is_darwin"],
     }
 
 

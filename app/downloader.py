@@ -53,9 +53,19 @@ def get_download_dir() -> str:
 
 
 def set_download_dir(new_path: str) -> str:
-    """設定並儲存新的下載資料夾路徑"""
+    """設定並儲存新的下載資料夾路徑，嚴格驗證實質寫入權限"""
     abs_path = os.path.abspath(os.path.expanduser(new_path.strip()))
     os.makedirs(abs_path, exist_ok=True)
+
+    # 嚴格測試目標目錄是否具備寫入權限 (防止唯讀系統目錄或權限不足)
+    test_f = os.path.join(abs_path, ".perm_test")
+    try:
+        with open(test_f, "w") as tf:
+            tf.write("ok")
+        os.remove(test_f)
+    except Exception as e:
+        raise PermissionError(f"資料夾「{abs_path}」無法寫入（權限不足或系統保護），請選擇具備讀寫權限的資料夾")
+
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump({"download_dir": abs_path}, f, ensure_ascii=False, indent=2)
     return abs_path

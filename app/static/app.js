@@ -158,6 +158,25 @@ document.addEventListener("DOMContentLoaded", () => {
     loadHistory();
     historySection.scrollIntoView({ behavior: "smooth" });
   });
+
+  // 目標環境切換按鈕 (Mac / Windows / NAS)
+  const tabMac = document.getElementById("tabPlatformMac");
+  const tabWin = document.getElementById("tabPlatformWin");
+  const tabNas = document.getElementById("tabPlatformNas");
+  const autoCheckbox = document.getElementById("autoDownloadCheckbox");
+
+  if (tabMac) tabMac.addEventListener("click", () => setTargetPlatform("mac"));
+  if (tabWin) tabWin.addEventListener("click", () => setTargetPlatform("windows"));
+  if (tabNas) tabNas.addEventListener("click", () => setTargetPlatform("nas"));
+
+  if (autoCheckbox) {
+    autoCheckbox.addEventListener("change", (e) => {
+      autoDownloadEnabled = e.target.checked;
+      localStorage.setItem("pd_auto_download", autoDownloadEnabled ? "true" : "false");
+    });
+  }
+
+  updatePlatformTabUI();
 });
 
 function showError(msg) {
@@ -458,6 +477,13 @@ function listenToProgress(taskId) {
         }
         currentFinishedFilepath = task.filepath || null;
         finishedActions.classList.remove("hidden");
+
+        // 若啟用本機電腦模式自動存檔，完成後自動觸發瀏覽器下載至 Mac / Windows
+        if (isAutoDownloadEnabled()) {
+          setTimeout(() => {
+            saveFileBtn.click();
+          }, 600);
+        }
         
         activeEventSource.close();
         loadHistory();
@@ -477,8 +503,52 @@ function listenToProgress(taskId) {
   };
 }
 
+let serverRuntimeMode = "macos";
+let selectedPlatform = localStorage.getItem("pd_target_platform") || detectClientPlatform();
+let autoDownloadEnabled = localStorage.getItem("pd_auto_download") !== "false";
+
+function detectClientPlatform() {
+  const ua = navigator.userAgent || "";
+  if (/Macintosh|Mac OS X/i.test(ua)) return "mac";
+  if (/Windows|Win32|Win64/i.test(ua)) return "windows";
+  return "nas";
+}
+
+function isAutoDownloadEnabled() {
+  return autoDownloadEnabled && (selectedPlatform === "mac" || selectedPlatform === "windows");
+}
+
+function setTargetPlatform(plat) {
+  selectedPlatform = plat;
+  localStorage.setItem("pd_target_platform", plat);
+  updatePlatformTabUI();
+  loadFsBrowse("", plat);
+}
+
+function updatePlatformTabUI() {
+  const tabMac = document.getElementById("tabPlatformMac");
+  const tabWin = document.getElementById("tabPlatformWin");
+  const tabNas = document.getElementById("tabPlatformNas");
+  const autoCheckbox = document.getElementById("autoDownloadCheckbox");
+
+  const activeClass = "bg-navy-600 border border-blue-500 text-white shadow-sm font-semibold";
+  const inactiveClass = "text-slate-400 hover:text-white border border-transparent";
+
+  if (tabMac) tabMac.className = `py-2 px-2 rounded-md font-medium flex items-center justify-center space-x-1 transition ${selectedPlatform === "mac" ? activeClass : inactiveClass}`;
+  if (tabWin) tabWin.className = `py-2 px-2 rounded-md font-medium flex items-center justify-center space-x-1 transition ${selectedPlatform === "windows" ? activeClass : inactiveClass}`;
+  if (tabNas) tabNas.className = `py-2 px-2 rounded-md font-medium flex items-center justify-center space-x-1 transition ${selectedPlatform === "nas" ? activeClass : inactiveClass}`;
+
+  if (autoCheckbox) {
+    autoCheckbox.checked = autoDownloadEnabled;
+  }
+}
+
 // 開啟本機資料夾 (可反白選取特定檔案)
 async function openDownloadFolder(filepath = null) {
+  if (serverRuntimeMode === "nas") {
+    alert("目前服務運行於 NAS 伺服器，檔案已儲存於 NAS 中。\n\n如需存入目前這台電腦，請在下載完成卡片點擊「另存檔案至瀏覽器」或開啟「自動另存至本機電腦」！");
+    return;
+  }
   try {
     const payload = (typeof filepath === "string" && filepath) ? { filepath } : {};
     const res = await fetch("/api/open-folder", {
@@ -500,7 +570,8 @@ async function openSettingsModal() {
   settingsNotice.classList.add("hidden");
   settingsNotice.textContent = "";
   settingsModal.classList.remove("hidden");
-  await loadFsBrowse();
+  updatePlatformTabUI();
+  await loadFsBrowse("", selectedPlatform);
   if (window.lucide) lucide.createIcons();
 }
 
@@ -509,10 +580,11 @@ function closeSettingsModal() {
   settingsModal.classList.add("hidden");
 }
 
-// 載入資料夾目錄樹與捷徑 (純滑鼠瀏覽)
-async function loadFsBrowse(targetPath = "") {
+// 載入資料夾目錄樹與捷徑 (純滑鼠瀏覽，支援指定平台)
+async function loadFsBrowse(targetPath = "", platform = "") {
   try {
-    const url = targetPath ? `/api/fs/browse?path=${encodeURIComponent(targetPath)}` : `/api/fs/browse`;
+    const plat = platform || selectedPlatform;
+    const url = `/api/fs/browse?platform=${encodeURIComponent(plat)}${targetPath ? `&path=${encodeURIComponent(targetPath)}` : ""}`;
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
@@ -520,18 +592,77 @@ async function loadFsBrowse(targetPath = "") {
     currentlyBrowsingPath = data.current_path;
     browsedParentPath = data.parent_path;
 
+    updatePlatformTabUI();
+
+    // 自適應運行環境 (NAS / Mac / Windows / Linux)
+    if (data.runtime_info) {
+      serverRuntimeMode = data.runtime_info.server_mode || data.runtime_info.mode || "macos";
+      const envModeTitle = document.getElementById("envModeTitle");
+      const envModeDesc = document.getElementById("envModeDesc");
+      const nativePickerWrapper = document.getElementById("nativePickerWrapper");
+      const chooseFolderBtnText = document.getElementById("chooseFolderBtnText");
+      const shortcutsLabel = document.getElementById("shortcutsLabel");
+      const manualPathLabel = document.getElementById("manualPathLabel");
+      const manualPathInput = document.getElementById("manualPathInput");
+      const openCurrentFolderBtn = document.getElementById("openCurrentFolderBtn");
+      const openCurrentFolderText = document.getElementById("openCurrentFolderText");
+
+      if (envModeTitle) envModeTitle.textContent = data.runtime_info.mode_title || "運行環境";
+      if (envModeDesc) envModeDesc.textContent = data.runtime_info.mode_desc || "";
+
+      if (manualPathInput && data.runtime_info.placeholder) {
+        manualPathInput.placeholder = data.runtime_info.placeholder;
+      }
+
+      if (nativePickerWrapper) {
+        if (data.runtime_info.can_native_pick) {
+          nativePickerWrapper.classList.remove("hidden");
+          if (chooseFolderBtnText && data.runtime_info.native_pick_label) {
+            chooseFolderBtnText.textContent = data.runtime_info.native_pick_label;
+          }
+        } else {
+          nativePickerWrapper.classList.add("hidden");
+        }
+      }
+
+      if (shortcutsLabel) {
+        shortcutsLabel.textContent = plat === "nas" ? "NAS 常用位置捷徑：" : `${plat === "mac" ? "Mac" : "Windows"} 本機常用位置捷徑：`;
+      }
+
+      if (manualPathLabel) {
+        manualPathLabel.textContent = plat === "nas" ? "手動指定 NAS 伺服器路徑：" : `手動指定 ${plat === "mac" ? "Mac" : "Windows"} 本機路徑：`;
+      }
+
+      if (openCurrentFolderBtn) {
+        if (data.runtime_info.can_native_pick) {
+          openCurrentFolderBtn.classList.remove("hidden");
+          if (openCurrentFolderText) {
+            openCurrentFolderText.textContent = plat === "mac" ? "在 Finder 開啟" : "在檔案總管開啟";
+          }
+        } else {
+          openCurrentFolderBtn.classList.add("hidden");
+        }
+      }
+    }
+
     // 更新可點擊麵包屑路徑顯示
     browserCurrentPath.innerHTML = "";
+    const isNas = plat === "nas";
+    const baseRootPath = isNas ? "/downloads" : "/";
     const parts = data.current_path.split("/").filter(Boolean);
+
     const rootSpan = document.createElement("span");
     rootSpan.className = "cursor-pointer hover:underline text-blue-400 font-bold px-1 rounded hover:bg-navy-850";
-    rootSpan.textContent = "💻 根目錄 /";
-    rootSpan.onclick = () => loadFsBrowse("/");
+    rootSpan.textContent = isNas ? "📦 NAS 下載區 (/downloads)" : (plat === "windows" ? "💻 系統磁碟 (C:)" : "💻 根目錄 /");
+    rootSpan.onclick = () => loadFsBrowse(baseRootPath, plat);
     browserCurrentPath.appendChild(rootSpan);
 
     let accumulated = "";
     parts.forEach((p) => {
       accumulated += "/" + p;
+      if (isNas && accumulated === "/downloads") {
+        return;
+      }
       const thisPath = accumulated;
       const sep = document.createElement("span");
       sep.className = "text-slate-600 select-none";
@@ -541,7 +672,7 @@ async function loadFsBrowse(targetPath = "") {
       const partSpan = document.createElement("span");
       partSpan.className = "cursor-pointer hover:underline text-slate-200 hover:text-white px-1 rounded hover:bg-navy-850 truncate max-w-[120px]";
       partSpan.textContent = p;
-      partSpan.onclick = () => loadFsBrowse(thisPath);
+      partSpan.onclick = () => loadFsBrowse(thisPath, plat);
       browserCurrentPath.appendChild(partSpan);
     });
 
@@ -572,9 +703,9 @@ async function loadFsBrowse(targetPath = "") {
             : "bg-navy-950 hover:bg-navy-850 border-navy-800 text-slate-200"
         }`;
         btn.innerHTML = `<i data-lucide="folder" class="w-3.5 h-3.5 text-slate-400"></i><span>${s.name}</span>`;
-        btn.addEventListener("click", () => {
-          applyDirectory(s.path);
-          loadFsBrowse(s.path);
+        btn.addEventListener("click", async () => {
+          await applyDirectory(s.path);
+          await loadFsBrowse(s.path, plat);
         });
         shortcutButtonsList.appendChild(btn);
       });
