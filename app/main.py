@@ -1,4 +1,5 @@
 import os
+import sys
 import uuid
 import asyncio
 import subprocess
@@ -23,7 +24,7 @@ from app.downloader import (
     format_bytes
 )
 
-app = FastAPI(title="PD Downloader", version="1.0.0")
+app = FastAPI(title="PD Downloader", version="0.1.0")
 
 # 允許跨域
 app.add_middleware(
@@ -201,25 +202,26 @@ async def api_choose_folder():
 
 @app.get("/api/fs/browse")
 async def api_fs_browse(path: str = None):
-    """取得資料夾清單供網頁內直接滑鼠點選瀏覽"""
+    """取得資料夾清單供網頁內直接滑鼠點選瀏覽 (全面支援本機電腦與所有磁碟)"""
     home = os.path.expanduser("~")
     
-    # 常用快速捷徑
+    # 常用快速捷徑 (本機電腦硬碟 + 家目錄 + 常用資料夾 + 外接磁碟)
     quick_shortcuts = [
-        {"name": "下載 (Downloads)", "path": os.path.join(home, "Downloads")},
-        {"name": "桌面 (Desktop)", "path": os.path.join(home, "Desktop")},
-        {"name": "影片 (Movies)", "path": os.path.join(home, "Movies")},
-        {"name": "音樂 (Music)", "path": os.path.join(home, "Music")},
-        {"name": "文件 (Documents)", "path": os.path.join(home, "Documents")},
-        {"name": "家目錄 (~)", "path": home},
+        {"name": "💻 本機硬碟 (Macintosh HD)", "path": "/"},
+        {"name": "🏠 家目錄 (~)", "path": home},
+        {"name": "📥 下載 (Downloads)", "path": os.path.join(home, "Downloads")},
+        {"name": "🖥️ 桌面 (Desktop)", "path": os.path.join(home, "Desktop")},
+        {"name": "🎬 影片 (Movies)", "path": os.path.join(home, "Movies")},
+        {"name": "🎵 音樂 (Music)", "path": os.path.join(home, "Music")},
+        {"name": "📄 文件 (Documents)", "path": os.path.join(home, "Documents")},
     ]
-    # 外接磁碟
+    # 外接磁碟 (如 資料碟、隨身碟、外接SSD)
     if os.path.exists("/Volumes"):
         try:
-            for v in os.listdir("/Volumes"):
+            for v in sorted(os.listdir("/Volumes")):
                 vpath = os.path.join("/Volumes", v)
                 if os.path.isdir(vpath) and not v.startswith("."):
-                    quick_shortcuts.append({"name": f"外接磁碟: {v}", "path": vpath})
+                    quick_shortcuts.append({"name": f"💾 {v}", "path": vpath})
         except Exception:
             pass
 
@@ -235,8 +237,11 @@ async def api_fs_browse(path: str = None):
             if item.startswith("."):
                 continue
             item_path = os.path.join(current, item)
-            if os.path.isdir(item_path):
-                folders.append({"name": item, "path": item_path})
+            try:
+                if os.path.isdir(item_path):
+                    folders.append({"name": item, "path": item_path})
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -245,7 +250,8 @@ async def api_fs_browse(path: str = None):
         "parent_path": parent,
         "folders": folders,
         "shortcuts": [s for s in quick_shortcuts if os.path.exists(s["path"])],
-        "active_download_dir": get_download_dir()
+        "active_download_dir": get_download_dir(),
+        "is_darwin": sys.platform == "darwin",
     }
 
 
@@ -295,14 +301,28 @@ async def api_delete_file(filename: str):
 
 
 @app.post("/api/open-folder")
-async def api_open_folder():
-    """在 macOS Finder 或檔案總管中直接開啟下載目錄 (NAS 無 GUI 模式則安全回傳路徑)"""
+async def api_open_folder(request: Request = None):
+    """在 macOS Finder 或檔案總管中直接開啟下載目錄 (可反白選取指定檔案)"""
     download_dir = get_download_dir()
+    filepath = None
+    if request:
+        try:
+            body = await request.json()
+            filepath = body.get("filepath")
+        except Exception:
+            pass
+
     try:
         if sys.platform == 'darwin':
-            subprocess.run(['open', download_dir], check=False)
+            if filepath and os.path.exists(filepath):
+                subprocess.run(['open', '-R', filepath], check=False)
+            else:
+                subprocess.run(['open', download_dir], check=False)
         elif sys.platform == 'win32':
-            os.startfile(download_dir)
+            if filepath and os.path.exists(filepath):
+                subprocess.run(['explorer', f'/select,"{os.path.normpath(filepath)}"'], check=False)
+            else:
+                os.startfile(download_dir)
         elif os.environ.get('DISPLAY'):
             subprocess.run(['xdg-open', download_dir], check=False)
         else:

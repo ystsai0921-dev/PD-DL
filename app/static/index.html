@@ -29,7 +29,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body class="bg-navy-950 text-slate-100 min-h-screen selection:bg-navy-600 selection:text-white">
 
@@ -73,17 +73,28 @@
             type="text" 
             id="urlInput"
             placeholder="請在此貼上影片或音訊網址..."
-            class="text-body-text w-full pl-10 pr-20 py-3 bg-navy-950 border border-navy-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-navy-500 transition"
+            class="text-body-text w-full pl-10 pr-36 py-3 bg-navy-950 border border-navy-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-navy-500 transition"
           >
-          <button 
-            id="pasteBtn"
-            type="button"
-            class="text-body-text absolute inset-y-1.5 right-1.5 px-3 bg-navy-900 hover:bg-navy-850 text-slate-200 rounded flex items-center space-x-1 transition border border-navy-800"
-            title="貼上剪貼簿內容"
-          >
-            <i data-lucide="clipboard" class="w-4 h-4"></i>
-            <span>貼上</span>
-          </button>
+          <div class="absolute inset-y-1.5 right-1.5 flex items-center space-x-1.5">
+            <button 
+              id="clearBtn"
+              type="button"
+              class="text-body-text h-full px-2.5 bg-navy-900 hover:bg-navy-850 text-slate-300 hover:text-red-400 rounded flex items-center space-x-1 transition border border-navy-800"
+              title="清空網址"
+            >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              <span>清空</span>
+            </button>
+            <button 
+              id="pasteBtn"
+              type="button"
+              class="text-body-text h-full px-3 bg-navy-900 hover:bg-navy-850 text-slate-200 rounded flex items-center space-x-1 transition border border-navy-800"
+              title="貼上剪貼簿內容"
+            >
+              <i data-lucide="clipboard" class="w-4 h-4"></i>
+              <span>貼上</span>
+            </button>
+          </div>
         </div>
         <button 
           id="analyzeBtn"
@@ -197,9 +208,95 @@
         <span id="progressPercent" class="text-sub-title font-mono text-slate-100 font-bold">0%</span>
       </div>
 
-      <!-- 進度條 (海軍藍底色配亮藍滑桿) -->
-      <div class="w-full bg-navy-950 rounded-full h-3 overflow-hidden border border-navy-800">
-        <div id="progressBar" class="bg-navy-600 h-full rounded-full transition-all duration-300 w-0"></div>
+      <!-- 柳丁牽引進度條容器 (配合黃化玄鳳羽毛與腮紅配色) -->
+      <div class="relative w-full pt-10 pb-2">
+        <!-- 柳丁卡通牽引員 (依進度前行，無上方文字氣泡) -->
+        <div id="liudingRunner" class="absolute top-0 z-10 transition-all duration-300 pointer-events-none select-none" style="left: 0px;">
+          <!-- 柳丁卡通公仔 (支援搖擺牽引、停滯旋轉流汗、完成歡呼) -->
+          <div id="liudingFigure" class="liuding-pulling">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 60" width="82" height="55" class="drop-shadow-md">
+              <defs>
+                <radialGradient id="liudingCheekGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#ff5722" />
+                  <stop offset="70%" stop-color="#f97316" />
+                  <stop offset="100%" stop-color="#ea580c" />
+                </radialGradient>
+              </defs>
+
+              <!-- 牽引繩 (深金黃到橙黃，緊密連結進度條與柳丁) -->
+              <path d="M 0 46 Q 16 41 33 37" stroke="#d97706" stroke-width="3" stroke-linecap="round" fill="none"/>
+              <path d="M 0 46 Q 16 41 33 37" stroke="#fde047" stroke-width="1.6" stroke-dasharray="4,2.5" stroke-linecap="round" fill="none"/>
+
+              <!-- 轉碼旋轉時的汗滴飛濺 (平時隱藏，轉碼時噴射) -->
+              <g id="liudingSweat" class="liuding-sweat-drops">
+                <path class="sweat-1" d="M 62 14 Q 68 8 67 15 Q 66 18 62 18 Q 59 18 62 14 Z" fill="#38bdf8" stroke="#0284c7" stroke-width="0.8"/>
+                <path class="sweat-2" d="M 46 8 Q 48 2 52 7 Q 54 11 50 12 Q 46 12 46 8 Z" fill="#38bdf8" stroke="#0284c7" stroke-width="0.8"/>
+                <path class="sweat-3" d="M 38 16 Q 34 11 37 16 Q 38 20 34 20 Q 32 19 38 16 Z" fill="#38bdf8" stroke="#0284c7" stroke-width="0.8"/>
+              </g>
+
+              <!-- 柳丁主體群組 -->
+              <g id="liudingMainBody">
+                <!-- 尾羽 -->
+                <path d="M 10 44 Q 24 38 34 34 Q 22 47 10 44 Z" fill="#fef08a" stroke="#eab308" stroke-width="1"/>
+                <path d="M 6 48 Q 22 41 32 36 Q 18 51 6 48 Z" fill="#fef9c3" stroke="#ca8a04" stroke-width="0.8"/>
+
+                <!-- 腳爪 (前進步態) -->
+                <path d="M 35 43 L 32 52 M 32 52 L 27 53 M 32 52 L 32 54 M 32 52 L 36 53" stroke="#f472b6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M 45 43 L 48 52 M 48 52 L 43 53 M 48 52 L 49 54 M 48 52 L 53 53" stroke="#f472b6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+                <!-- 身體 (黃化玄鳳奶油乳白色) -->
+                <ellipse cx="39" cy="34" rx="16" ry="13" fill="#fffef0" stroke="#fde047" stroke-width="1.3"/>
+
+                <!-- 翅膀 (柔和鵝黃色層次) -->
+                <path d="M 29 27 C 29 20, 43 22, 46 32 C 42 40, 30 38, 29 27 Z" fill="#fef9c3" stroke="#eab308" stroke-width="1"/>
+                <path d="M 32 30 C 34 25, 41 27, 44 33" stroke="#fde047" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+
+                <!-- 冠羽 (經典長冠毛，向上衝刺帶微翹) -->
+                <g class="liuding-crest-shape">
+                  <path d="M 52 14 Q 45 -3 35 -8 Q 43 4 49 11 Z" fill="#facc15" stroke="#ca8a04" stroke-width="1"/>
+                  <path d="M 55 12 Q 51 -1 45 -5 Q 50 6 53 10 Z" fill="#fde047" stroke="#ca8a04" stroke-width="0.8"/>
+                  <path d="M 57 13 Q 56 1 53 -3 Q 56 7 56 11 Z" fill="#fef08a" stroke="#eab308" stroke-width="0.7"/>
+                </g>
+
+                <!-- 頭部 (鮮亮檸檬黃) -->
+                <circle cx="53" cy="22" r="13" fill="#fde047" stroke="#eab308" stroke-width="1.2"/>
+
+                <!-- 柳丁招牌大橘紅腮紅 -->
+                <circle cx="48" cy="25" r="5.2" fill="url(#liudingCheekGlow)"/>
+                <circle cx="48" cy="25" r="3.6" fill="#fb923c"/>
+
+                <!-- 玄鳳鸚鵡標誌性大彎鉤嘴 (Parrot Hooked Beak) -->
+                <!-- 下喙 (粉紅小巧內縮) -->
+                <path d="M 62 26 C 65 28, 67 31, 64 32 C 62 32, 61 29, 62 26 Z" fill="#f9a8d4" stroke="#db2777" stroke-width="0.8"/>
+                <!-- 上喙 (典型鸚鵡鷹鉤大弧形，向下扣住下喙) -->
+                <path d="M 60 18 C 67 19, 73 23, 72 31 C 70 33, 67 32, 66 28 C 63 24, 61 22, 60 18 Z" fill="#fbcfe8" stroke="#db2777" stroke-width="1.2"/>
+                <!-- 鼻膜/鼻孔 (Cere & Nostril) -->
+                <circle cx="61" cy="20" r="1.3" fill="#f472b6"/>
+                <circle cx="61" cy="20" r="0.6" fill="#9d174d"/>
+
+                <!-- 眼睛 (正常晶亮大眼) -->
+                <g id="liudingEyeNormal">
+                  <circle cx="55" cy="18" r="3.2" fill="#0f172a"/>
+                  <circle cx="56.2" cy="17" r="1.2" fill="#ffffff"/>
+                  <circle cx="54.2" cy="19.2" r="0.5" fill="#ffffff"/>
+                </g>
+
+                <!-- 眼睛 (轉碼暈眩/拼命眼) -->
+                <g id="liudingEyeDizzy" class="hidden">
+                  <path d="M 52 18 Q 55 15 58 18 Q 55 21 52 18" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 進度條軌道 (厚實深色外框，突出金黃色進度) -->
+        <div class="w-full bg-navy-950 rounded-full h-5 overflow-hidden border border-navy-800 shadow-inner relative p-0.5">
+          <!-- 柳丁拉動的亮黃色進度條 (直接內嵌純亮黃漸層樣式，保證 100% 絕對顯示) -->
+          <div id="progressBar" 
+               class="liuding-progress-bar h-full rounded-full transition-all duration-300 w-0 bg-yellow-400" 
+               style="background: linear-gradient(90deg, #fef08a 0%, #fde047 30%, #facc15 65%, #eab308 90%, #d97706 100%) !important; box-shadow: 0 0 14px rgba(250, 204, 21, 0.75) !important;"></div>
+        </div>
       </div>
 
       <!-- 下載數據指標 (嚴格統一內文字級) -->
@@ -296,16 +393,36 @@
             class="w-full py-3 px-4 bg-navy-600 hover:bg-navy-500 active:scale-[0.99] text-white font-medium rounded-lg flex items-center justify-center space-x-2 border border-blue-500 shadow-md transition"
           >
             <i data-lucide="folder-search" class="w-5 h-5"></i>
-            <span>開啟系統 Finder 視窗瀏覽選取</span>
+            <span>開啟系統 Finder 視窗瀏覽選取（本機電腦）</span>
           </button>
         </div>
 
         <!-- 狀態反饋提示框 -->
         <div id="settingsNotice" class="hidden text-body-text p-2.5 rounded bg-navy-950 border border-navy-800 text-slate-200"></div>
 
+        <!-- 手動輸入或貼上本機資料夾路徑 -->
+        <div class="space-y-1.5 pt-1 border-t border-navy-800">
+          <span class="text-body-text text-slate-400 block text-xs">手動指定路徑（可直接貼上本機電腦任何資料夾）：</span>
+          <div class="flex items-center space-x-2">
+            <input 
+              type="text" 
+              id="manualPathInput" 
+              placeholder="例如：/Users/您的名稱/Downloads 或 /Volumes/資料碟" 
+              class="text-body-text flex-1 px-3 py-2 bg-navy-950 border border-navy-800 rounded-lg text-slate-100 placeholder-slate-500 font-mono text-xs focus:outline-none focus:border-navy-500 transition"
+            >
+            <button 
+              id="applyManualPathBtn" 
+              type="button" 
+              class="text-body-text px-4 py-2 bg-navy-850 hover:bg-navy-800 border border-navy-800 rounded-lg text-slate-200 flex-shrink-0 transition"
+            >
+              套用
+            </button>
+          </div>
+        </div>
+
         <!-- 快速常用位置捷徑 -->
         <div class="space-y-2 pt-1 border-t border-navy-800">
-          <span class="text-body-text text-slate-400 block">或直接點選常用位置：</span>
+          <span class="text-body-text text-slate-400 block">本機電腦常用位置捷徑：</span>
           <div id="shortcutButtonsList" class="flex flex-wrap gap-2 text-body-text">
             <!-- 動態注入捷徑按鈕 -->
           </div>
@@ -353,7 +470,7 @@
         <p>僅供個人學習與備份使用，請尊重版權內容。</p>
       </div>
       <div class="text-right">
-        <span class="font-mono text-slate-400 text-sm">v0.0</span>
+        <span class="font-mono text-slate-400 text-sm">v0.1</span>
       </div>
     </div>
   </footer>

@@ -4,9 +4,11 @@ let currentMetadata = null;
 let currentMode = "video"; // 'video' or 'audio'
 let selectedFormat = null;
 let activeEventSource = null;
+let currentFinishedFilepath = null;
 
 // DOM 元素
 const urlInput = document.getElementById("urlInput");
+const clearBtn = document.getElementById("clearBtn");
 const pasteBtn = document.getElementById("pasteBtn");
 const analyzeBtn = document.getElementById("analyzeBtn");
 const analyzeLoading = document.getElementById("analyzeLoading");
@@ -33,6 +35,8 @@ const progressTitle = document.getElementById("progressTitle");
 const progressStatus = document.getElementById("progressStatus");
 const progressPercent = document.getElementById("progressPercent");
 const progressBar = document.getElementById("progressBar");
+const liudingRunner = document.getElementById("liudingRunner");
+const liudingFigure = document.getElementById("liudingFigure");
 const statSpeed = document.getElementById("statSpeed");
 const statSize = document.getElementById("statSize");
 const statEta = document.getElementById("statEta");
@@ -54,6 +58,8 @@ const navUpBtn = document.getElementById("navUpBtn");
 const browserCurrentPath = document.getElementById("browserCurrentPath");
 const fsFolderList = document.getElementById("fsFolderList");
 const applyBrowsedDirBtn = document.getElementById("applyBrowsedDirBtn");
+const manualPathInput = document.getElementById("manualPathInput");
+const applyManualPathBtn = document.getElementById("applyManualPathBtn");
 
 let browsedParentPath = null;
 let currentlyBrowsingPath = "";
@@ -67,6 +73,17 @@ const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
 // 初始化事件
 document.addEventListener("DOMContentLoaded", () => {
   loadHistory();
+
+  // 清空按鈕
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      urlInput.value = "";
+      urlInput.focus();
+      if (errorMessage) errorMessage.classList.add("hidden");
+      if (resultSection) resultSection.classList.add("hidden");
+      currentMetadata = null;
+    });
+  }
 
   // 貼上按鈕
   pasteBtn.addEventListener("click", async () => {
@@ -103,14 +120,34 @@ document.addEventListener("DOMContentLoaded", () => {
   closeSettingsBtn.addEventListener("click", closeSettingsModal);
   cancelSettingsBtn.addEventListener("click", closeSettingsModal);
   chooseFolderBtn.addEventListener("click", chooseFolderNative);
-  openCurrentFolderBtn.addEventListener("click", openDownloadFolder);
-  openFolderActionBtn.addEventListener("click", openDownloadFolder);
+  openCurrentFolderBtn.addEventListener("click", () => openDownloadFolder());
+  openFolderActionBtn.addEventListener("click", () => openDownloadFolder(currentFinishedFilepath));
   navUpBtn.addEventListener("click", () => {
     if (browsedParentPath) loadFsBrowse(browsedParentPath);
   });
   applyBrowsedDirBtn.addEventListener("click", () => {
     if (currentlyBrowsingPath) applyDirectory(currentlyBrowsingPath);
   });
+
+  // 手動路徑輸入套用
+  if (applyManualPathBtn && manualPathInput) {
+    applyManualPathBtn.addEventListener("click", () => {
+      const p = manualPathInput.value.trim();
+      if (p) {
+        applyDirectory(p);
+        loadFsBrowse(p);
+      }
+    });
+    manualPathInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const p = manualPathInput.value.trim();
+        if (p) {
+          applyDirectory(p);
+          loadFsBrowse(p);
+        }
+      }
+    });
+  }
 
   // 歷史紀錄重新整理與開啟目錄
   refreshFileListBtn.addEventListener("click", loadHistory);
@@ -348,8 +385,7 @@ async function triggerDownload() {
   finishedActions.classList.add("hidden");
   progressTitle.textContent = currentMetadata.title;
   progressStatus.textContent = "正在發送請求至下載引擎...";
-  progressPercent.textContent = "0%";
-  progressBar.style.width = "0%";
+  updateLiudingProgress(0, "downloading");
   statSpeed.textContent = "--";
   statSize.textContent = "-- / --";
   statEta.textContent = "--";
@@ -389,42 +425,44 @@ function listenToProgress(taskId) {
       if (task.error) {
         progressStatus.textContent = `錯誤: ${task.error}`;
         progressStatus.className = "text-xs text-red-400 font-medium";
+        updateLiudingProgress(task.percent || 0, "failed");
         activeEventSource.close();
         return;
       }
 
-      progressPercent.textContent = `${task.percent}%`;
-      progressBar.style.width = `${task.percent}%`;
       statSpeed.textContent = task.speed_str || "--";
       statSize.textContent = `${task.downloaded_str} / ${task.total_str}`;
       statEta.textContent = task.eta_str || "--";
 
       if (task.status === "downloading") {
-        progressStatus.textContent = "高速下載中...";
-        progressStatus.className = "text-body-text text-slate-200";
+        updateLiudingProgress(task.percent, "downloading");
+        progressStatus.textContent = "柳丁努力牽引下載中...";
+        progressStatus.className = "text-body-text text-amber-200";
       } else if (task.status === "processing") {
+        updateLiudingProgress(task.percent || 99, "processing");
         progressStatus.textContent = "正在合成音訊與轉碼封裝...";
-        progressStatus.className = "text-body-text text-slate-300 animate-pulse";
+        progressStatus.className = "text-body-text text-amber-300 animate-pulse";
       } else if (task.status === "finished") {
+        updateLiudingProgress(100, "finished");
         if (task.note) {
           progressStatus.textContent = task.note;
           progressStatus.className = "text-body-text text-amber-300 font-medium";
         } else {
-          progressStatus.textContent = "下載與處理已完成";
+          progressStatus.textContent = "下載與處理已完成！柳丁順利完成任務";
           progressStatus.className = "text-body-text text-white font-medium";
         }
-        progressBar.style.width = "100%";
-        progressPercent.textContent = "100%";
         
         saveFileBtn.href = `/api/files/download/${taskId}`;
         if (task.filename) {
           saveFileBtn.setAttribute("download", task.filename);
         }
+        currentFinishedFilepath = task.filepath || null;
         finishedActions.classList.remove("hidden");
         
         activeEventSource.close();
         loadHistory();
       } else if (task.status === "failed") {
+        updateLiudingProgress(task.percent || 0, "failed");
         progressStatus.textContent = `下載失敗: ${task.error || "未知錯誤"}`;
         progressStatus.className = "text-body-text text-red-300";
         activeEventSource.close();
@@ -439,10 +477,15 @@ function listenToProgress(taskId) {
   };
 }
 
-// 開啟本機資料夾
-async function openDownloadFolder() {
+// 開啟本機資料夾 (可反白選取特定檔案)
+async function openDownloadFolder(filepath = null) {
   try {
-    const res = await fetch("/api/open-folder", { method: "POST" });
+    const payload = (typeof filepath === "string" && filepath) ? { filepath } : {};
+    const res = await fetch("/api/open-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
     const data = await res.json();
     if (data.status === "error") {
       alert(`開啟資料夾失敗，路徑位於：\n${data.path}`);
@@ -477,8 +520,34 @@ async function loadFsBrowse(targetPath = "") {
     currentlyBrowsingPath = data.current_path;
     browsedParentPath = data.parent_path;
 
-    // 更新路徑顯示
-    browserCurrentPath.textContent = data.current_path;
+    // 更新可點擊麵包屑路徑顯示
+    browserCurrentPath.innerHTML = "";
+    const parts = data.current_path.split("/").filter(Boolean);
+    const rootSpan = document.createElement("span");
+    rootSpan.className = "cursor-pointer hover:underline text-blue-400 font-bold px-1 rounded hover:bg-navy-850";
+    rootSpan.textContent = "💻 根目錄 /";
+    rootSpan.onclick = () => loadFsBrowse("/");
+    browserCurrentPath.appendChild(rootSpan);
+
+    let accumulated = "";
+    parts.forEach((p) => {
+      accumulated += "/" + p;
+      const thisPath = accumulated;
+      const sep = document.createElement("span");
+      sep.className = "text-slate-600 select-none";
+      sep.textContent = "›";
+      browserCurrentPath.appendChild(sep);
+
+      const partSpan = document.createElement("span");
+      partSpan.className = "cursor-pointer hover:underline text-slate-200 hover:text-white px-1 rounded hover:bg-navy-850 truncate max-w-[120px]";
+      partSpan.textContent = p;
+      partSpan.onclick = () => loadFsBrowse(thisPath);
+      browserCurrentPath.appendChild(partSpan);
+    });
+
+    if (manualPathInput) {
+      manualPathInput.value = data.current_path;
+    }
     currentActiveDirDisplay.textContent = data.active_download_dir;
 
     // 處理上一層按鈕狀態
@@ -633,5 +702,47 @@ async function loadHistory() {
     if (window.lucide) lucide.createIcons();
   } catch (e) {
     console.error("載入下載歷史失敗", e);
+  }
+}
+
+// 更新柳丁牽引進度條與卡通動作狀態
+function updateLiudingProgress(percent, status = "downloading") {
+  const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+  if (progressBar) {
+    progressBar.style.width = `${clamped}%`;
+    progressBar.style.background = "linear-gradient(90deg, #fef08a 0%, #fde047 30%, #facc15 65%, #eab308 90%, #d97706 100%)";
+  }
+  if (progressPercent) {
+    progressPercent.textContent = `${clamped.toFixed(1)}%`;
+  }
+
+  if (liudingRunner) {
+    // 讓繩索起始端緊扣黃色進度條前端，柳丁在前方拉動，且不超出右側邊界
+    liudingRunner.style.left = `clamp(0px, calc(${clamped}% - 8px), calc(100% - 78px))`;
+  }
+
+  const eyeNormal = document.getElementById("liudingEyeNormal");
+  const eyeDizzy = document.getElementById("liudingEyeDizzy");
+
+  if (!liudingFigure) return;
+
+  if (status === "finished") {
+    liudingFigure.className = "liuding-celebrate";
+    if (eyeNormal) eyeNormal.classList.remove("hidden");
+    if (eyeDizzy) eyeDizzy.classList.add("hidden");
+  } else if (status === "processing") {
+    // 轉碼停滯原地時：旋轉掙扎且汗滴四射
+    liudingFigure.className = "liuding-sweating";
+    if (eyeNormal) eyeNormal.classList.add("hidden");
+    if (eyeDizzy) eyeDizzy.classList.remove("hidden");
+  } else if (status === "failed") {
+    liudingFigure.className = "";
+    if (eyeNormal) eyeNormal.classList.remove("hidden");
+    if (eyeDizzy) eyeDizzy.classList.add("hidden");
+  } else {
+    // 正常下載前進：前傾搖擺牽引
+    liudingFigure.className = "liuding-pulling";
+    if (eyeNormal) eyeNormal.classList.remove("hidden");
+    if (eyeDizzy) eyeDizzy.classList.add("hidden");
   }
 }
