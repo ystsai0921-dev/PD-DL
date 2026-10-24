@@ -1,0 +1,27 @@
+# macOS / AppleDouble files
+.DS_Store
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# Downloaded files & temporary partial files
+downloads/*
+!downloads/.gitkeep
+*.mp4
+*.mp3
+*.mkv
+*.webm
+*.part
+*.ytdl
+
+# Logs
+*.log
+
+# Local Config (optional override)
+config.json

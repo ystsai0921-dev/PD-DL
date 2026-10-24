@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PD Downloader</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            navy: {
+              950: '#070d18',
+              900: '#0e192a',
+              850: '#132238',
+              800: '#1b2d45',
+              700: '#253d5e',
+              600: '#1d4ed8',
+              500: '#2563eb',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-navy-950 text-slate-100 min-h-screen selection:bg-navy-600 selection:text-white">
+
+  <!-- 頂部導航列 -->
+  <header class="border-b border-navy-800 sticky top-0 z-50 bg-navy-950/90 backdrop-blur-md">
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <img src="/static/logo.svg" alt="PD Downloader Logo" class="w-10 h-10 rounded-lg border border-navy-800 shadow-md">
+        <div class="flex items-baseline space-x-2">
+          <span class="text-sub-title text-slate-100">
+            PD Downloader
+          </span>
+          <span class="text-body-text px-2 py-0.5 rounded bg-navy-900 text-slate-300 border border-navy-800">
+            影音下載器
+          </span>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-2">
+        <button id="settingsBtn" class="text-body-text flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-navy-900 hover:bg-navy-850 border border-navy-800 text-slate-200 transition" title="設定下載資料夾">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          <span>設定下載資料夾</span>
+        </button>
+        <button id="refreshHistoryBtn" class="text-body-text p-2 rounded-lg bg-navy-900 hover:bg-navy-850 border border-navy-800 text-slate-200 transition" title="歷史紀錄">
+          <i data-lucide="history" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    
+    <!-- 網址輸入面板 -->
+    <div class="bg-navy-900 border border-navy-800 rounded-xl p-4 shadow-lg">
+      <div class="flex flex-col sm:flex-row items-center gap-3">
+        <div class="relative flex-1 w-full">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="link" class="w-4 h-4"></i>
+          </div>
+          <input 
+            type="text" 
+            id="urlInput"
+            placeholder="請在此貼上影片或音訊網址..."
+            class="text-body-text w-full pl-10 pr-20 py-3 bg-navy-950 border border-navy-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-navy-500 transition"
+          >
+          <button 
+            id="pasteBtn"
+            type="button"
+            class="text-body-text absolute inset-y-1.5 right-1.5 px-3 bg-navy-900 hover:bg-navy-850 text-slate-200 rounded flex items-center space-x-1 transition border border-navy-800"
+            title="貼上剪貼簿內容"
+          >
+            <i data-lucide="clipboard" class="w-4 h-4"></i>
+            <span>貼上</span>
+          </button>
+        </div>
+        <button 
+          id="analyzeBtn"
+          class="text-body-text w-full sm:w-auto px-6 py-3 bg-navy-600 hover:bg-navy-500 text-white font-medium rounded-lg flex items-center justify-center space-x-2 transition border border-blue-500 shadow-sm"
+        >
+          <i data-lucide="search" class="w-4 h-4"></i>
+          <span>開始解析</span>
+        </button>
+      </div>
+
+      <!-- 解析中狀態指示器 -->
+      <div id="analyzeLoading" class="hidden pt-6 pb-2 text-center space-y-3">
+        <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-navy-800 text-slate-300 animate-spin">
+          <i data-lucide="loader-2" class="w-5 h-5"></i>
+        </div>
+        <p class="text-body-text text-slate-300">正在解析網址與抓取所有可用畫質規格，請稍候...</p>
+      </div>
+
+      <!-- 錯誤訊息提示 -->
+      <div id="errorMessage" class="hidden mt-4 p-3 rounded-lg bg-red-950/60 border border-red-800 text-red-200 text-body-text flex items-start space-x-2">
+        <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+        <span id="errorText" class="flex-1 break-all"></span>
+      </div>
+    </div>
+
+    <!-- 影片資訊與畫質選擇面板 (解析完成後顯示) -->
+    <div id="resultSection" class="hidden space-y-5">
+      
+      <!-- 影片摘要預覽卡片 -->
+      <div class="bg-navy-900 border border-navy-800 rounded-xl p-4 shadow-lg flex flex-col md:flex-row gap-4 items-start">
+        <div class="relative w-full md:w-60 aspect-video rounded-lg overflow-hidden bg-navy-950 flex-shrink-0 border border-navy-800">
+          <img id="metaThumb" src="" alt="Thumbnail" class="w-full h-full object-cover">
+          <span id="metaDuration" class="text-body-text absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/85 text-white font-mono">00:00</span>
+        </div>
+        <div class="flex-1 space-y-2">
+          <div class="flex items-center gap-2 flex-wrap text-body-text">
+            <span id="metaExtractor" class="px-2 py-0.5 rounded bg-navy-850 text-slate-200 border border-navy-800">
+              平台
+            </span>
+            <span id="metaUploader" class="text-slate-400">
+              作者
+            </span>
+          </div>
+          <h2 id="metaTitle" class="text-sub-title text-slate-100 line-clamp-2">
+            影片標題
+          </h2>
+          <p class="text-body-text text-slate-400">
+            請在下方選擇您欲下載的格式與畫質等級：
+          </p>
+        </div>
+      </div>
+
+      <!-- 下載類型切換 (視訊 / 音訊) -->
+      <div class="bg-navy-900 border border-navy-800 rounded-xl p-5 shadow-lg space-y-5">
+        <div class="flex items-center justify-between border-b border-navy-800 pb-3 flex-wrap gap-2">
+          <div class="flex space-x-2">
+            <button id="tabVideo" class="tab-btn active text-body-text px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition">
+              <i data-lucide="video" class="w-4 h-4"></i>
+              <span>視訊下載 (影片+聲音)</span>
+            </button>
+            <button id="tabAudio" class="tab-btn text-body-text px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition">
+              <i data-lucide="music" class="w-4 h-4"></i>
+              <span>純音訊下載 (MP3/音樂)</span>
+            </button>
+          </div>
+          
+          <div id="formatExtSelector" class="flex items-center space-x-2 text-body-text">
+            <span class="text-slate-400">輸出容器：</span>
+            <select id="outputExtSelect" class="bg-navy-950 border border-navy-800 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-navy-500">
+              <option value="mp4">MP4 (相容性佳)</option>
+              <option value="mkv">MKV (完整規格)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 視訊格式降階清單 -->
+        <div id="videoFormatsList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <!-- 動態注入格式項目 -->
+        </div>
+
+        <!-- 音訊格式降階清單 -->
+        <div id="audioFormatsList" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3">
+          <!-- 動態注入音訊項目 -->
+        </div>
+
+        <!-- 立即下載按鈕 -->
+        <div class="pt-2 flex justify-end">
+          <button 
+            id="startDownloadBtn"
+            class="text-body-text px-6 py-3 bg-navy-600 hover:bg-navy-500 text-white font-medium rounded-lg flex items-center space-x-2 border border-blue-500 shadow-md transition"
+          >
+            <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>
+            <span id="downloadBtnText">立即開始下載</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 下載進度儀表板 (下載觸發後顯示) -->
+    <div id="progressSection" class="hidden bg-navy-900 border border-navy-800 rounded-xl p-5 shadow-lg space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div id="progressIcon" class="w-9 h-9 rounded-lg bg-navy-850 text-slate-200 flex items-center justify-center border border-navy-800">
+            <i data-lucide="download" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="progressTitle" class="text-sub-title text-slate-100 line-clamp-1">正在下載中...</h3>
+            <p id="progressStatus" class="text-body-text text-slate-300">準備中</p>
+          </div>
+        </div>
+        <span id="progressPercent" class="text-sub-title font-mono text-slate-100 font-bold">0%</span>
+      </div>
+
+      <!-- 進度條 (海軍藍底色配亮藍滑桿) -->
+      <div class="w-full bg-navy-950 rounded-full h-3 overflow-hidden border border-navy-800">
+        <div id="progressBar" class="bg-navy-600 h-full rounded-full transition-all duration-300 w-0"></div>
+      </div>
+
+      <!-- 下載數據指標 (嚴格統一內文字級) -->
+      <div class="grid grid-cols-3 gap-2 text-center py-2.5 bg-navy-950 rounded-lg border border-navy-800 text-body-text">
+        <div>
+          <span class="text-slate-400 block">下載速度</span>
+          <span id="statSpeed" class="font-mono text-slate-200 font-medium">--</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block">已下載 / 總量</span>
+          <span id="statSize" class="font-mono text-slate-200 font-medium">-- / --</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block">預估剩餘時間</span>
+          <span id="statEta" class="font-mono text-slate-200 font-medium">--</span>
+        </div>
+      </div>
+
+      <!-- 下載完成後的行動按鈕 -->
+      <div id="finishedActions" class="hidden pt-2 flex flex-col sm:flex-row gap-3 justify-end">
+        <button id="openFolderActionBtn" class="text-body-text px-4 py-2 rounded-lg border border-navy-800 bg-navy-850 hover:bg-navy-800 text-slate-200 flex items-center justify-center space-x-2 transition">
+          <i data-lucide="folder-open" class="w-4 h-4"></i>
+          <span>在資料夾中檢視</span>
+        </button>
+        <a id="saveFileBtn" href="#" download class="text-body-text px-5 py-2 rounded-lg bg-navy-600 hover:bg-navy-500 text-white font-medium flex items-center justify-center space-x-2 border border-blue-500 transition">
+          <i data-lucide="save" class="w-4 h-4"></i>
+          <span>另存檔案至瀏覽器</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 歷史下載記錄與管理 -->
+    <div id="historySection" class="bg-navy-900 border border-navy-800 rounded-xl p-5 shadow-lg space-y-4">
+      <div class="flex items-center justify-between border-b border-navy-800 pb-3">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="hard-drive" class="w-4 h-4 text-slate-400"></i>
+          <h3 class="text-sub-title text-slate-100">本機下載目錄檔案</h3>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button id="refreshFileListBtn" class="text-body-text text-slate-400 hover:text-white flex items-center space-x-1.5 transition" title="重新整理檔案清單">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            <span>重新整理</span>
+          </button>
+          <button id="openFolderFromListBtn" class="text-body-text text-slate-400 hover:text-white flex items-center space-x-1.5 transition" title="在系統 Finder 中開啟此資料夾">
+            <i data-lucide="folder-open" class="w-4 h-4"></i>
+            <span>開啟下載資料夾</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="historyEmpty" class="py-6 text-center text-slate-500 text-body-text">
+        目前下載目錄尚無檔案
+      </div>
+
+      <div id="historyList" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+        <!-- 動態注入歷史檔案項目 -->
+      </div>
+    </div>
+
+    <!-- 設定下載資料夾對話框 (Modal) - 純瀏覽方式，無手動輸入 -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-navy-900 border border-navy-800 rounded-xl p-5 max-w-xl w-full shadow-2xl space-y-4">
+        
+        <!-- 標題列 -->
+        <div class="flex items-center justify-between border-b border-navy-800 pb-3">
+          <h3 class="text-sub-title text-slate-100 flex items-center space-x-2">
+            <i data-lucide="folder-cog" class="w-5 h-5 text-slate-400"></i>
+            <span>設定下載資料夾</span>
+          </h3>
+          <button id="closeSettingsBtn" class="text-slate-400 hover:text-white p-1">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- 目前已綁定的路徑卡片 -->
+        <div class="p-3 bg-navy-950 border border-navy-800 rounded-lg space-y-1">
+          <div class="flex items-center justify-between text-body-text">
+            <span class="text-slate-400">目前下載儲存位置：</span>
+            <button id="openCurrentFolderBtn" class="text-slate-300 hover:text-white flex items-center space-x-1 underline text-body-text">
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+              <span>在 Finder 開啟</span>
+            </button>
+          </div>
+          <div id="currentActiveDirDisplay" class="text-body-text text-slate-100 font-mono break-all font-semibold">
+            載入中...
+          </div>
+        </div>
+
+        <!-- 系統原生視窗瀏覽按鈕 (主要行動) -->
+        <div>
+          <button 
+            id="chooseFolderBtn" 
+            type="button" 
+            class="w-full py-3 px-4 bg-navy-600 hover:bg-navy-500 active:scale-[0.99] text-white font-medium rounded-lg flex items-center justify-center space-x-2 border border-blue-500 shadow-md transition"
+          >
+            <i data-lucide="folder-search" class="w-5 h-5"></i>
+            <span>開啟系統 Finder 視窗瀏覽選取</span>
+          </button>
+        </div>
+
+        <!-- 狀態反饋提示框 -->
+        <div id="settingsNotice" class="hidden text-body-text p-2.5 rounded bg-navy-950 border border-navy-800 text-slate-200"></div>
+
+        <!-- 快速常用位置捷徑 -->
+        <div class="space-y-2 pt-1 border-t border-navy-800">
+          <span class="text-body-text text-slate-400 block">或直接點選常用位置：</span>
+          <div id="shortcutButtonsList" class="flex flex-wrap gap-2 text-body-text">
+            <!-- 動態注入捷徑按鈕 -->
+          </div>
+        </div>
+
+        <!-- 網頁內資料夾目錄瀏覽樹 -->
+        <div class="space-y-2 pt-1 border-t border-navy-800">
+          <div class="flex items-center justify-between text-body-text">
+            <span class="text-slate-400">資料夾目錄瀏覽：</span>
+            <button id="navUpBtn" class="px-2.5 py-1 bg-navy-850 hover:bg-navy-800 border border-navy-800 rounded text-slate-300 flex items-center space-x-1 transition">
+              <i data-lucide="corner-left-up" class="w-3.5 h-3.5"></i>
+              <span>上一層目錄</span>
+            </button>
+          </div>
+          <div id="browserCurrentPath" class="text-body-text text-slate-300 font-mono px-2 py-1 bg-navy-950 rounded border border-navy-800 break-all text-ellipsis overflow-hidden">
+            /
+          </div>
+          <div id="fsFolderList" class="max-h-48 overflow-y-auto space-y-1 p-1 bg-navy-950/60 rounded border border-navy-800">
+            <!-- 動態載入子資料夾 -->
+          </div>
+          <button 
+            id="applyBrowsedDirBtn"
+            class="w-full py-2 bg-navy-850 hover:bg-navy-800 text-slate-200 border border-navy-800 rounded-lg text-body-text flex items-center justify-center space-x-2 transition"
+          >
+            <i data-lucide="check" class="w-4 h-4 text-blue-400"></i>
+            <span>將目前瀏覽的資料夾設為下載目錄</span>
+          </button>
+        </div>
+
+        <!-- 底部關閉按鈕 -->
+        <div class="flex items-center justify-end pt-2 border-t border-navy-800">
+          <button id="cancelSettingsBtn" class="text-body-text px-5 py-2 bg-navy-850 hover:bg-navy-800 text-slate-300 rounded-lg border border-navy-800 transition">
+            完成關閉
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="border-t border-navy-900 mt-12 py-8 text-body-text text-slate-500">
+    <div class="max-w-5xl mx-auto px-4 flex items-center justify-between">
+      <div class="space-y-1">
+        <p>PD Downloader · 支援各大影音平台最高規格與降階儲存</p>
+        <p>僅供個人學習與備份使用，請尊重版權內容。</p>
+      </div>
+      <div class="text-right">
+        <span class="font-mono text-slate-400 text-sm">v0.0</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
