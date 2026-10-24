@@ -296,13 +296,17 @@ async def api_delete_file(filename: str):
 
 @app.post("/api/open-folder")
 async def api_open_folder():
-    """在 macOS Finder 或檔案總管中直接開啟下載目錄"""
+    """在 macOS Finder 或檔案總管中直接開啟下載目錄 (NAS 無 GUI 模式則安全回傳路徑)"""
     download_dir = get_download_dir()
     try:
-        if os.name == 'posix':
+        if sys.platform == 'darwin':
             subprocess.run(['open', download_dir], check=False)
-        else:
+        elif sys.platform == 'win32':
             os.startfile(download_dir)
+        elif os.environ.get('DISPLAY'):
+            subprocess.run(['xdg-open', download_dir], check=False)
+        else:
+            return {"status": "success", "message": f"NAS 伺服器運作中，檔案儲存於：{download_dir}", "path": download_dir}
         return {"status": "success", "path": download_dir}
     except Exception as e:
         return {"status": "error", "message": str(e), "path": download_dir}

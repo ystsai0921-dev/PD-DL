@@ -22,6 +22,16 @@ os.makedirs(DEFAULT_DOWNLOAD_DIR, exist_ok=True)
 
 def get_download_dir() -> str:
     """取得當前設定的下載資料夾路徑，並驗證寫入權限"""
+    # 支援 Docker / NAS 環境變數 DOWNLOAD_DIR (最高優先權)
+    env_dir = os.environ.get("DOWNLOAD_DIR")
+    if env_dir:
+        try:
+            os.makedirs(env_dir, exist_ok=True)
+            if os.path.isdir(env_dir):
+                return os.path.abspath(env_dir)
+        except Exception:
+            pass
+
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:

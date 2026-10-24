@@ -38,6 +38,8 @@
 
 ## 🚀 啟動方式
 
+### 1. 本機直接啟動 (macOS / Linux / Windows)
+
 在專案目錄下執行以下指令即可啟動服務：
 
 ```bash
@@ -52,6 +54,32 @@
 
 啟動後，系統會自動在預設瀏覽器中開啟 Web 介面：
 👉 **http://localhost:8000**
+
+---
+
+### 2. 部署到家用 NAS / 私有雲 (Docker / Docker Compose)
+
+PD Downloader 支援透過 Docker 容器一鍵部署至 ASUSTOR、Synology、QNAP 或通用 Linux NAS，實現 24 小時常駐離線下載。
+
+#### 使用 Docker Compose 啟動：
+
+1. 將本專案複製或 Git Clone 至 NAS：
+   ```bash
+   git clone https://github.com/ystsai0921-dev/PD-DL.git
+   cd PD-DL
+   ```
+
+2. 啟動容器：
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. 存取 Web 介面：
+   👉 **http://<您的NAS_IP>:8000**（例如：`http://192.168.50.124:8000`）
+
+4. 下載儲存位置：
+   - 預設映射於本專案目錄下的 `downloads/` 資料夾。
+   - 若需映射至 NAS 指定的共用資料夾（例如 `/volume1/Download`），只需在 `docker-compose.yml` 中修改 volume 掛載路徑即可。
 
 ---
 
