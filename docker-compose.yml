@@ -7,12 +7,12 @@ services:
     container_name: pd-downloader
     restart: unless-stopped
     ports:
-      # NAS 對外開放的 Web 介面連接埠 (本機埠:容器埠)
+      # NAS 對外開放的 Web 介面連接埠 (http://192.168.50.124:8000)
       - "8000:8000"
     volumes:
-      # 將 NAS 上的下載共享資料夾映射到容器內
-      # ASUSTOR 預設常用路徑例如 /volume1/Download/PD-DL 或 ./downloads
-      - ./downloads:/downloads
+      # 將 NAS 的 Download 共用資料夾掛載到容器內
+      # 下載的檔案會直接出現在 ASUSTOR 檔案總管的「Download/PD-DL」中
+      - /volume1/Download/PD-DL:/downloads
     environment:
       - DOWNLOAD_DIR=/downloads
       - TZ=Asia/Taipei
