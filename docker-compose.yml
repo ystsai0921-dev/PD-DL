@@ -10,9 +10,8 @@ services:
       # NAS 對外開放的 Web 介面連接埠 (http://192.168.50.124:8000)
       - "8000:8000"
     volumes:
-      # 將 NAS 的 Download 共用資料夾掛載到容器內
-      # 下載的檔案會直接出現在 ASUSTOR 檔案總管的「Download/PD-DL」中
-      - /volume1/Download/PD-DL:/downloads
+      # 自動儲存在專案目錄下的 downloads 資料夾中 (通用相容於任何 NAS 目錄結構)
+      - ./downloads:/downloads
     environment:
       - DOWNLOAD_DIR=/downloads
       - TZ=Asia/Taipei
