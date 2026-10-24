@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   pd-downloader:
+    image: ghcr.io/ystsai0921-dev/pd-dl:latest
     build: .
-    image: pd-downloader:latest
     container_name: pd-downloader
     restart: unless-stopped
     ports:
@@ -15,3 +15,17 @@ services:
     environment:
       - DOWNLOAD_DIR=/downloads
       - TZ=Asia/Taipei
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: pd-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # 自動清除舊版本映像檔，避免佔用 NAS 磁碟空間
+      - WATCHTOWER_CLEANUP=true
+      # 每 300 秒 (5 分鐘) 檢查一次 GitHub 是否有新版本
+      - WATCHTOWER_POLL_INTERVAL=300
+    # 嚴格限制：僅自動更新 pd-downloader，絕不干擾 NAS 上其他容器 (如 Jellyfin / Portainer)
+    command: --interval 300 pd-downloader
